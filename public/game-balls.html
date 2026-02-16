@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3D Tilt Hole Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.js"></script>
+    <style>
+      body { margin:0; background:#000; color:#fff; font-family:sans-serif; }
+      .ui { position: fixed; top: 10px; left: 10px; z-index: 10; }
+      button { padding: 8px 10px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="ui">
+      <button id="connect">ルームに入る</button>
+      <div>status: <span id="st">WAIT</span></div>
+      <div>score: <span id="sc">0</span></div>
+      <div style="font-size:12px;opacity:.8;">
+        スマホ: /smart.html（①許可→②参加）<br/>
+        PC: /game-balls.html
+      </div>
+    </div>
+
+    <script>
+      const socket = io.connect();
+      const btn = document.querySelector("#connect");
+      const st = document.querySelector("#st");
+      const sc = document.querySelector("#sc");
+
+      let g = 0, b = 0;
+
+      btn.addEventListener("click", () => {
+        socket.emit("join", "game");
+        btn.remove();
+        st.textContent = "PLAYING";
+      });
+
+      socket.on("sensor", (data) => {
+        g = parseFloat(data.g) || 0;
+        b = parseFloat(data.b) || 0;
+      });
+
+      let x = 0, y = 0;
+      const r = 34;
+      let vx = 0, vy = 0;
+      const accel = 0.015;
+      const friction = 0.985;
+
+      const boardW = 800, boardH = 800, boardZ = -60;
+
+      let hx = 0, hy = 0;
+      const holeR = 60;
+
+      let over = false;
+      let score = 0;
+
+      function resetGame() {
+        x = 0; y = 0; vx = 0; vy = 0;
+        over = false;
+        score = 0;
+        sc.textContent = score;
+        st.textContent = "PLAYING";
+        spawnHole();
+      }
+
+      function spawnHole() {
+        hx = random(-boardW/2 + 150, boardW/2 - 150);
+        hy = random(-boardH/2 + 150, boardH/2 - 150);
+      }
+
+      function setup() {
+        createCanvas(800, 800, WEBGL);
+        camera(0, 800, 140, 0, 0, 0, 0, 1, 0);
+        noStroke();
+        spawnHole();
+      }
+
+      function draw() {
+        background(0);
+
+        ambientLight(40);
+        directionalLight(140, 140, 140, -0.5, -1, -0.2);
+        pointLight(80, 120, 255, 0, -200, 500);
+
+        push();
+        rotateX((-PI * b) / 180);
+        rotateY((PI * g) / 180);
+        translate(0, 0, boardZ);
+        ambientMaterial(25);
+        box(boardW, boardH, 30);
+        pop();
+
+        push();
+        translate(hx, hy, boardZ + 18);
+        ambientMaterial(255, 60, 150);
+        torus(holeR, 10, 24, 16);
+        pop();
+
+        if (!over && st.textContent !== "WAIT") {
+          vx += accel * g;
+          vy += accel * b;
+          vx *= friction;
+          vy *= friction;
+          x += vx;
+          y += vy;
+
+          const limitX = boardW/2 - r;
+          const limitY = boardH/2 - r;
+
+          if (x > limitX) { x = limitX; vx *= -0.6; }
+          if (x < -limitX) { x = -limitX; vx *= -0.6; }
+          if (y > limitY) { y = limitY; vy *= -0.6; }
+          if (y < -limitY) { y = -limitY; vy *= -0.6; }
+
+          if (frameCount % 30 === 0) {
+            score += 1;
+            sc.textContent = score;
+          }
+
+          const d = dist(x, y, hx, hy);
+          if (d < holeR - 10) {
+            over = true;
+            st.textContent = "GAME OVER (Press R)";
+          }
+        }
+
+        const z = -x * sin((PI * g) / 180) - y * sin((PI * b) / 180);
+
+        push();
+        translate(x, y, z);
+        if (over) ambientMaterial(120);
+        else specularMaterial(220);
+        shininess(80);
+        sphere(r);
+        pop();
+      }
+
+      function keyPressed() {
+        if (key === "r" || key === "R") resetGame();
+      }
+    </script>
+  </body>
+</html>
